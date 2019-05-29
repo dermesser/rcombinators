@@ -64,7 +64,10 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
     pub fn finished(&self) -> bool {
         self.next.is_none() && self.current == self.buf.len()
     }
-
+    pub fn undo_next(&mut self) {
+        assert!(self.current > 0);
+        self.current -= 1;
+    }
     pub fn current(&self) -> Option<Iter::Item> {
         if self.current < self.buf.len() {
             Some(self.buf[self.current])

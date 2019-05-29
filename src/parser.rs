@@ -1,4 +1,3 @@
-
 use std::fmt;
 
 use crate::state::ParseState;
@@ -22,5 +21,8 @@ pub type ParseResult<R> = Result<R, ParseError>;
 
 pub trait Parser {
     type Result;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result>;
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result>;
 }
