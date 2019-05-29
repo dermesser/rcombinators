@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
-mod state;
+mod combinators;
 mod parser;
 mod primitives;
+mod state;
