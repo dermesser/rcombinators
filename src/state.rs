@@ -28,7 +28,28 @@ pub struct ParseState<Iter: Iterator<Item = char>> {
     // TODO: Implement garbage collection on `buf`
 }
 
-pub struct Hold(usize);
+pub struct Hold {
+    ix: usize,
+    released: bool,
+}
+
+impl Hold {
+    fn new(ix: usize) -> Hold {
+        Hold {
+            ix: ix,
+            released: false,
+        }
+    }
+    fn defuse(&mut self) {
+        self.released = true;
+    }
+}
+
+impl Drop for Hold {
+    fn drop(&mut self) {
+        assert!(self.released, "Dropped unreleased hold! This is a bug");
+    }
+}
 
 impl<'a> ParseState<Chars<'a>> {
     pub fn new(s: &'a str) -> ParseState<Chars<'a>> {
@@ -53,13 +74,15 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
         self.current
     }
     pub fn hold(&mut self) -> Hold {
-        Hold(self.current)
+        Hold::new(self.current)
     }
-    pub fn release(&mut self, _h: Hold) {
+    pub fn release(&mut self, mut h: Hold) {
         // TODO: Implement when hold tracking is needed (for garbage collection).
+        h.defuse();
     }
-    pub fn reset(&mut self, h: Hold) {
-        self.current = h.0;
+    pub fn reset(&mut self, mut h: Hold) {
+        self.current = h.ix;
+        h.defuse();
     }
     pub fn finished(&self) -> bool {
         self.next.is_none() && self.current == self.buf.len()
@@ -140,6 +163,13 @@ mod tests {
         s.reset(hold);
         let rest: String = s.collect();
         assert_eq!("Hello", rest);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_hold_unreleased() {
+        let mut s = ParseState::new("abcde");
+        let _hold = s.hold();
     }
 
     use crate::primitives;

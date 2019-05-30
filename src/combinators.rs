@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_long_seq() {
-        let s = (|| StringParser::new("a"));
+        let s = || StringParser::new("a");
         let mut p = Sequence::new((s(), s(), s(), s(), s(), s(), s(), s(), s(), s()));
         let mut ps = ParseState::new("aaaaaaaaaa");
         assert_eq!(

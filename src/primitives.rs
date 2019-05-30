@@ -4,7 +4,9 @@ use crate::state::ParseState;
 pub struct StringParser(String);
 
 impl StringParser {
-    pub fn new<S: AsRef<str>>(s: S) -> StringParser { StringParser(s.as_ref().to_owned()) }
+    pub fn new<S: AsRef<str>>(s: S) -> StringParser {
+        StringParser(s.as_ref().to_owned())
+    }
 }
 
 impl Parser for StringParser {
