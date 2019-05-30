@@ -6,6 +6,8 @@ use crate::state::ParseState;
 pub enum ParseError {
     EOF,
     Fail(&'static str, usize),
+    /// Error during application of Transform.
+    TransformFail(&'static str, usize),
 }
 
 impl fmt::Display for ParseError {
@@ -13,6 +15,7 @@ impl fmt::Display for ParseError {
         match self {
             ParseError::EOF => f.write_str("EOF"),
             ParseError::Fail(s, pos) => write!(f, "Parse fail: {} at {}", s, pos),
+            ParseError::TransformFail(s, pos) => write!(f, "Transform fail: {} at {}", s, pos),
         }
     }
 }

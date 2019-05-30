@@ -1,6 +1,32 @@
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
+/// Transform applies a function (which may fail) to the result of a parser. Transform only
+/// succeeds if the applied function succeeds, too.
+pub struct Transform<R, R2, P: Parser<Result = R>, F: Fn(R) -> ParseResult<R2>> {
+    f: F,
+    p: P,
+}
+
+impl<R, R2, P: Parser<Result = R>, F: Fn(R) -> ParseResult<R2>> Transform<R, R2, P, F> {
+    pub fn new(p: P, f: F) -> Transform<R, R2, P, F> {
+        Transform { f: f, p: p }
+    }
+}
+
+impl<R, R2, P: Parser<Result = R>, F: Fn(R) -> ParseResult<R2>> Parser for Transform<R, R2, P, F> {
+    type Result = R2;
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
+        match self.p.parse(st) {
+            Ok(o) => (self.f)(o),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub struct Alternative<T>(T);
 
 impl<T> Alternative<T> {
@@ -189,9 +215,11 @@ mod tests {
             StringParser::new("ab"),
             StringParser::new("de"),
             StringParser::new(" "),
+            Transform::new(Int, |i| Ok(i.to_string())),
         ));
         let mut ps = ParseState::new("de 34");
         assert_eq!(Ok("de".to_string()), p.parse(&mut ps));
         assert_eq!(Ok(" ".to_string()), p.parse(&mut ps));
+        assert_eq!(Ok("34".to_string()), p.parse(&mut ps));
     }
 }
