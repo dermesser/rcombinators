@@ -1,7 +1,11 @@
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
-pub struct StringParser(pub String);
+pub struct StringParser(String);
+
+impl StringParser {
+    pub fn new<S: AsRef<str>>(s: S) -> StringParser { StringParser(s.as_ref().to_owned()) }
+}
 
 impl Parser for StringParser {
     type Result = String;
@@ -76,7 +80,7 @@ mod tests {
     #[test]
     fn test_parse_string() {
         let mut s = ParseState::new("abc def");
-        let mut p = StringParser("abc ".to_owned());
+        let mut p = StringParser::new("abc ".to_owned());
         assert_eq!(Ok("abc ".to_owned()), p.parse(&mut s));
         assert_eq!(4, s.index());
     }
@@ -85,7 +89,7 @@ mod tests {
     fn test_parse_int() {
         let mut s = ParseState::new("-1252 353");
         let mut ip = Int;
-        let mut sp = StringParser(" ".to_string());
+        let mut sp = StringParser::new(" ".to_string());
         assert_eq!(Ok(-1252), ip.parse(&mut s));
         assert_eq!(Ok(" ".to_string()), sp.parse(&mut s));
         assert_eq!(Ok(353), ip.parse(&mut s));

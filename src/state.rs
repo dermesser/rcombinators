@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(Some('H'), ps.next());
         assert_eq!(
             Ok("üð".to_string()),
-            primitives::StringParser("üð".to_string()).parse(&mut ps)
+            primitives::StringParser::new("üð".to_string()).parse(&mut ps)
         );
     }
 }
