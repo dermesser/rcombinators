@@ -1,16 +1,91 @@
-use crate::parser::{ParseResult, Parser};
+use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
-pub struct Sequence<T> {
-    t: T,
+pub struct Alternative<T>(T);
+
+impl<T> Alternative<T> {
+    pub fn new(tuple: T) -> Alternative<T> {
+        Alternative(tuple)
+    }
+}
+
+macro_rules! alt_impl {
+    ( ( $($ptype:ident/$ix:tt),* ) ) => {
+        impl<R, $($ptype : Parser<Result=R>, )*> Parser for Alternative<($($ptype,)*)> {
+            type Result = R;
+            fn parse(&mut self, st: &mut ParseState<impl Iterator<Item = char>>) -> ParseResult<Self::Result> {
+                $(
+                    let hold = st.hold();
+                    match (self.0).$ix.parse(st) {
+                        Err(_) => (),
+                        Ok(o) => { st.release(hold); return Ok(o) }
+                    }
+                    st.reset(hold);
+                )*
+                return Err(ParseError::Fail("no alternative matched", st.index()))
+            }
+        }
+    }
+}
+
+alt_impl!((P0 / 0, P1 / 1));
+alt_impl!((P0 / 0, P1 / 1, P2 / 2));
+alt_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3));
+alt_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4));
+alt_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4, P5 / 5));
+alt_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4, P5 / 5, P6 / 6));
+alt_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7
+));
+alt_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7,
+    P8 / 8
+));
+alt_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7,
+    P8 / 8,
+    P9 / 9
+));
+
+/// Sequence concatenates parsers and only succeeds if all of them do. T is always a tuple in order
+/// for Sequence to implement the Parser trait. The result is a tuple of all the parser results.
+///
+/// Individual parsers need to have result types implementing Default.
+pub struct Sequence<T>(T);
+
+macro_rules! sequence {
+    ($($p:expr),+) => { Sequence::new(($($p),*)) };
+    ($p:expr) => { $p };
 }
 
 impl<T> Sequence<T> {
     pub fn new(tuple: T) -> Sequence<T> {
-        Sequence { t: tuple }
+        Sequence(tuple)
     }
 }
 
+/// Macro for implementing sequence parsers for arbitrary tuples. Not for public use.
 macro_rules! seq_impl {
     ( ( $($ptype:ident/$ix:tt),+ ) ) => {
         impl<$($ptype : Parser<Result=impl Default>, )*> Parser for Sequence<($($ptype,)*)> {
@@ -19,7 +94,7 @@ macro_rules! seq_impl {
                 let hold = st.hold();
                 let mut result = Self::Result::default();
                 $(
-                    let r = (self.t.$ix).parse(st);
+                    let r = (self.0).$ix.parse(st);
                     if r.is_err() {
                         st.reset(hold);
                         return Err(r.err().unwrap());
@@ -106,5 +181,17 @@ mod tests {
             )),
             p.parse(&mut ps)
         );
+    }
+
+    #[test]
+    fn test_alternative() {
+        let mut p = Alternative::new((
+            StringParser::new("ab"),
+            StringParser::new("de"),
+            StringParser::new(" "),
+        ));
+        let mut ps = ParseState::new("de 34");
+        assert_eq!(Ok("de".to_string()), p.parse(&mut ps));
+        assert_eq!(Ok(" ".to_string()), p.parse(&mut ps));
     }
 }
