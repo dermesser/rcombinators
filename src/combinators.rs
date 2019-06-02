@@ -9,6 +9,7 @@ pub struct Transform<R, R2, P: Parser<Result = R>, F: Fn(R) -> ParseResult<R2>> 
 }
 
 impl<R, R2, P: Parser<Result = R>, F: Fn(R) -> ParseResult<R2>> Transform<R, R2, P, F> {
+    /// Create a new Transform parser using f.
     pub fn new(p: P, f: F) -> Transform<R, R2, P, F> {
         Transform { f: f, p: p }
     }
@@ -174,6 +175,125 @@ seq_impl!((
     P9 / 9
 ));
 
+/// PartialSequence concatenates parsers and tries to parse as far as possible.
+///
+/// Individual parsers need to have result types implementing Default.
+pub struct PartialSequence<T>(T);
+
+impl<T> PartialSequence<T> {
+    pub fn new(tuple: T) -> PartialSequence<T> {
+        PartialSequence(tuple)
+    }
+}
+
+/// Macro for implementing sequence parsers for arbitrary tuples. Not for public use.
+macro_rules! pseq_impl {
+    ( ( $($ptype:ident/$ix:tt),+ ) ) => {
+        impl<$($ptype : Parser<Result=impl Default>, )*> Parser for PartialSequence<($($ptype,)*)> {
+            type Result = ($(Option<$ptype::Result>,)*);
+            fn parse(&mut self, st: &mut ParseState<impl Iterator<Item = char>>) -> ParseResult<Self::Result> {
+                let hold = st.hold();
+                let mut result = Self::Result::default();
+                $(
+                    let r = (self.0).$ix.parse(st);
+                    if r.is_err() {
+                        st.release(hold);
+                        return Ok(result);
+                    }
+                    result.$ix = Some(r.unwrap());
+                )*
+                st.release(hold);
+                return Ok(result);
+            }
+        }
+    }
+}
+
+pseq_impl!((P0 / 0, P1 / 1));
+pseq_impl!((P0 / 0, P1 / 1, P2 / 2));
+pseq_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3));
+pseq_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4));
+pseq_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4, P5 / 5));
+pseq_impl!((P0 / 0, P1 / 1, P2 / 2, P3 / 3, P4 / 4, P5 / 5, P6 / 6));
+pseq_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7
+));
+pseq_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7,
+    P8 / 8
+));
+pseq_impl!((
+    P0 / 0,
+    P1 / 1,
+    P2 / 2,
+    P3 / 3,
+    P4 / 4,
+    P5 / 5,
+    P6 / 6,
+    P7 / 7,
+    P8 / 8,
+    P9 / 9
+));
+
+pub enum RepeatSpec {
+    /// Any is equivalent to Min(0).
+    Any,
+    Min(usize),
+    Max(usize),
+    Between(usize, usize),
+}
+
+pub struct Repeat<P: Parser> {
+    inner: P,
+    repeat: RepeatSpec,
+}
+
+impl<R, P: Parser<Result=R>> Parser for Repeat<P> {
+    type Result = Vec<R>;
+    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+        let (min, max) = match self.repeat {
+            RepeatSpec::Any => (0, -1),
+            RepeatSpec::Min(i) => (i as isize, -1),
+            RepeatSpec::Max(i) => (0, i as isize),
+            RepeatSpec::Between(i, j) => (i as isize, j as isize),
+        };
+        let mut v: Self::Result = Vec::new();
+        let hold = st.hold();
+        for i in 0.. {
+            if i > max {
+                return Ok(v);
+            }
+            match self.inner.parse(st) {
+                Ok(r) => v.push(r),
+                Err(e) => {
+                    if i >= min {
+                        st.release(hold);
+                        return Ok(v);
+                    } else {
+                        st.reset(hold);
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        unreachable!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +341,20 @@ mod tests {
         assert_eq!(Ok("de".to_string()), p.parse(&mut ps));
         assert_eq!(Ok(" ".to_string()), p.parse(&mut ps));
         assert_eq!(Ok("34".to_string()), p.parse(&mut ps));
+    }
+
+    #[test]
+    fn test_partial_sequence() {
+        let mut p = PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int));
+        let mut ps = ParseState::new("acde");
+        assert_eq!(Ok((Some("a".to_string()), Some("c".to_string()), None)), p.parse(&mut ps));
+
+        let mut p = PartialSequence::new(
+            (Sequence::new((Int, StringParser::new(" "), Int)),
+            StringParser::new("x")));
+        let mut ps = ParseState::new("12 -12 nothing else");
+        assert_eq!(Ok((
+                    Some((12, " ".to_string(), -12)),
+                    None)), p.parse(&mut ps));
     }
 }
