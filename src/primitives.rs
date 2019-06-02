@@ -89,21 +89,25 @@ impl OneOf {
 
 impl Parser for OneOf {
     type Result = char;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item = char>>) -> ParseResult<Self::Result> {
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
         match st.peek() {
-            Some(c) if self.0.contains(&c) => { st.next(); Ok(c) },
+            Some(c) if self.0.contains(&c) => {
+                st.next();
+                Ok(c)
+            }
             _ => Err(ParseError::Fail("char not matched", st.index())),
         }
     }
 }
 
 /// A parser that parses a string consisting of characters `chars`.
-fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result=String> {
+fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
     let oo = OneOf::new(chars);
     let rp = Repeat::new(oo, rp);
-    let make_string = |charvec: Vec<char>| {
-        Ok(String::from_iter(charvec.into_iter()))
-    };
+    let make_string = |charvec: Vec<char>| Ok(String::from_iter(charvec.into_iter()));
     Transform::new(rp, make_string)
 }
 

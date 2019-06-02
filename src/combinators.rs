@@ -1,3 +1,5 @@
+use std::ops::Shr;
+
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
@@ -100,11 +102,6 @@ alt_impl!((
 ///
 /// Individual parsers need to have result types implementing Default.
 pub struct Sequence<T>(T);
-
-macro_rules! sequence {
-    ($($p:expr),+) => { Sequence::new(($($p),*)) };
-    ($p:expr) => { $p };
-}
 
 impl<T> Sequence<T> {
     pub fn new(tuple: T) -> Sequence<T> {
@@ -264,13 +261,19 @@ pub struct Repeat<P: Parser> {
 
 impl<P: Parser> Repeat<P> {
     pub fn new(p: P, r: RepeatSpec) -> Repeat<P> {
-        Repeat { inner: p, repeat: r }
+        Repeat {
+            inner: p,
+            repeat: r,
+        }
     }
 }
 
-impl<R, P: Parser<Result=R>> Parser for Repeat<P> {
+impl<R, P: Parser<Result = R>> Parser for Repeat<P> {
     type Result = Vec<R>;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
         let (min, max) = match self.repeat {
             RepeatSpec::Any => (0, std::usize::MAX),
             RepeatSpec::Min(min) => (min as usize, std::usize::MAX),
@@ -354,14 +357,19 @@ mod tests {
     fn test_partial_sequence() {
         let mut p = PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int));
         let mut ps = ParseState::new("acde");
-        assert_eq!(Ok((Some("a".to_string()), Some("c".to_string()), None)), p.parse(&mut ps));
+        assert_eq!(
+            Ok((Some("a".to_string()), Some("c".to_string()), None)),
+            p.parse(&mut ps)
+        );
 
-        let mut p = PartialSequence::new(
-            (Sequence::new((Int, StringParser::new(" "), Int)),
-            StringParser::new("x")));
+        let mut p = PartialSequence::new((
+            Sequence::new((Int, StringParser::new(" "), Int)),
+            StringParser::new("x"),
+        ));
         let mut ps = ParseState::new("12 -12 nothing else");
-        assert_eq!(Ok((
-                    Some((12, " ".to_string(), -12)),
-                    None)), p.parse(&mut ps));
+        assert_eq!(
+            Ok((Some((12, " ".to_string(), -12)), None)),
+            p.parse(&mut ps)
+        );
     }
 }
