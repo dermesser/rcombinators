@@ -5,10 +5,20 @@ use crate::state::ParseState;
 
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
+    /// Input is over.
     EOF,
+    /// Input didn't match expectations, try next option if possible.
     Fail(&'static str, usize),
     /// Error during application of Transform.
-    TransformFail(&'static str, usize),
+    TransformFail(&'static str, usize, Box<ParseError>),
+    /// ExecFail is an error that occurred while executing "user code", e.g. during a Transform
+    /// parser.
+    ExecFail(String),
+}
+
+/// This function returns an error for returning from a function called by a `Transform` parser.
+pub fn execerr<S: AsRef<str>>(s: S) -> ParseError {
+    ParseError::ExecFail(s.as_ref().to_string())
 }
 
 impl fmt::Display for ParseError {
@@ -16,7 +26,12 @@ impl fmt::Display for ParseError {
         match self {
             ParseError::EOF => f.write_str("EOF"),
             ParseError::Fail(s, pos) => write!(f, "Parse fail: {} at {}", s, pos),
-            ParseError::TransformFail(s, pos) => write!(f, "Transform fail: {} at {}", s, pos),
+            ParseError::TransformFail(s, pos, inner) => {
+                write!(f, "Transform fail: {} at {} due to ", s, pos).and_then(|()| inner.fmt(f))
+            }
+            ParseError::ExecFail(s) => {
+                write!(f, "Logic error: {}", s)
+            }
         }
     }
 }
@@ -25,6 +40,8 @@ pub type ParseResult<R> = Result<R, ParseError>;
 
 pub trait Parser {
     type Result;
+
+    /// parse consumes input from `st` and returns a result or an error.
     fn parse(
         &mut self,
         st: &mut ParseState<impl Iterator<Item = char>>,
