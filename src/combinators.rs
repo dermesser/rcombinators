@@ -262,19 +262,26 @@ pub struct Repeat<P: Parser> {
     repeat: RepeatSpec,
 }
 
+impl<P: Parser> Repeat<P> {
+    pub fn new(p: P, r: RepeatSpec) -> Repeat<P> {
+        Repeat { inner: p, repeat: r }
+    }
+}
+
 impl<R, P: Parser<Result=R>> Parser for Repeat<P> {
     type Result = Vec<R>;
     fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
         let (min, max) = match self.repeat {
-            RepeatSpec::Any => (0, -1),
-            RepeatSpec::Min(i) => (i as isize, -1),
-            RepeatSpec::Max(i) => (0, i as isize),
-            RepeatSpec::Between(i, j) => (i as isize, j as isize),
+            RepeatSpec::Any => (0, std::usize::MAX),
+            RepeatSpec::Min(min) => (min as usize, std::usize::MAX),
+            RepeatSpec::Max(max) => (0, max as usize),
+            RepeatSpec::Between(min, max) => (min as usize, max as usize),
         };
         let mut v: Self::Result = Vec::new();
         let hold = st.hold();
         for i in 0.. {
             if i > max {
+                st.release(hold);
                 return Ok(v);
             }
             match self.inner.parse(st) {
