@@ -1,5 +1,9 @@
+use crate::combinators::{Repeat, RepeatSpec, Transform};
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
+
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 pub struct StringParser(String);
 
@@ -75,6 +79,34 @@ impl Parser for Int {
     }
 }
 
+pub struct OneOf(HashSet<char>);
+
+impl OneOf {
+    pub fn new<S: AsRef<str>>(chars: S) -> OneOf {
+        OneOf(chars.as_ref().chars().collect())
+    }
+}
+
+impl Parser for OneOf {
+    type Result = char;
+    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item = char>>) -> ParseResult<Self::Result> {
+        match st.peek() {
+            Some(c) if self.0.contains(&c) => { st.next(); Ok(c) },
+            _ => Err(ParseError::Fail("char not matched", st.index())),
+        }
+    }
+}
+
+/// A parser that parses a string consisting of characters `chars`.
+fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result=String> {
+    let oo = OneOf::new(chars);
+    let rp = Repeat::new(oo, rp);
+    let make_string = |charvec: Vec<char>| {
+        Ok(String::from_iter(charvec.into_iter()))
+    };
+    Transform::new(rp, make_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +127,12 @@ mod tests {
         assert_eq!(Ok(-1252), ip.parse(&mut s));
         assert_eq!(Ok(" ".to_string()), sp.parse(&mut s));
         assert_eq!(Ok(353), ip.parse(&mut s));
+    }
+
+    #[test]
+    fn test_string_of() {
+        let mut st = ParseState::new("aaabcxxzy");
+        let mut p = string_of("abcd", RepeatSpec::Min(1));
+        assert_eq!(Ok("aaabc".to_string()), p.parse(&mut st));
     }
 }
