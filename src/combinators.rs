@@ -1,5 +1,3 @@
-use std::ops::Shr;
-
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
@@ -312,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_pair() {
-        let mut p = Sequence::new((Int, StringParser::new(" aba".to_string())));
+        let mut p = Sequence::new((Int64::new(), StringParser::new(" aba".to_string())));
         let mut ps = ParseState::new("123 aba");
         assert_eq!(Ok((123, " aba".to_string())), p.parse(&mut ps));
     }
@@ -345,7 +343,7 @@ mod tests {
             StringParser::new("ab"),
             StringParser::new("de"),
             StringParser::new(" "),
-            Transform::new(Int, |i| Ok(i.to_string())),
+            Transform::new(Int64::new(), |i| Ok(i.to_string())),
         ));
         let mut ps = ParseState::new("de 34");
         assert_eq!(Ok("de".to_string()), p.parse(&mut ps));
@@ -355,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_partial_sequence() {
-        let mut p = PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int));
+        let mut p = PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int64::new()));
         let mut ps = ParseState::new("acde");
         assert_eq!(
             Ok((Some("a".to_string()), Some("c".to_string()), None)),
@@ -363,7 +361,7 @@ mod tests {
         );
 
         let mut p = PartialSequence::new((
-            Sequence::new((Int, StringParser::new(" "), Int)),
+            Sequence::new((Int64::new(), StringParser::new(" "), Int64::new())),
             StringParser::new("x"),
         ));
         let mut ps = ParseState::new("12 -12 nothing else");
