@@ -1,4 +1,4 @@
-use crate::combinators::{Repeat, RepeatSpec, Transform};
+use crate::combinators::{Repeat, RepeatSpec};
 use crate::parser::{ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
@@ -108,7 +108,7 @@ fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = St
     let oo = OneOf::new(chars);
     let rp = Repeat::new(oo, rp);
     let make_string = |charvec: Vec<char>| Ok(String::from_iter(charvec.into_iter()));
-    Transform::new(rp, make_string)
+    rp.apply(make_string)
 }
 
 #[cfg(test)]

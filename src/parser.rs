@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::combinators;
 use crate::state::ParseState;
 
 #[derive(Debug, PartialEq)]
@@ -28,4 +29,15 @@ pub trait Parser {
         &mut self,
         st: &mut ParseState<impl Iterator<Item = char>>,
     ) -> ParseResult<Self::Result>;
+
+    /// apply transforms the result of this parser using a Transform combinator.
+    fn apply<R2, F: Fn(Self::Result) -> ParseResult<R2>>(
+        self,
+        f: F,
+    ) -> combinators::Transform<Self::Result, R2, Self, F>
+    where
+        Self: std::marker::Sized,
+    {
+        combinators::Transform::new(self, f)
+    }
 }
