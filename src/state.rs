@@ -106,16 +106,20 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
         }
     }
     pub fn peek(&mut self) -> Option<Iter::Item> {
-        if self.current + 1 < self.buf.len() {
-            Some(self.buf[self.current + 1])
-        } else {
-            let c = self.next();
-            if c == None {
-                return None;
+        if self.current < self.buf.len() {
+            return Some(self.buf[self.current]);
+        } else if self.current == self.buf.len() && self.next.is_some() {
+            match self.next() {
+                Some(c) => {
+                    self.current -= 1;
+                    return Some(c);
+                }
+                None => return None,
             }
-            self.current -= 1;
-            c
+        } else if self.next.is_none() {
+            return None;
         }
+        unreachable!()
     }
 }
 
@@ -147,7 +151,7 @@ mod tests {
     use crate::parser::Parser;
 
     #[test]
-    fn init() {
+    fn test_basic() {
         let mut s = ParseState::new("Hello");
         assert_eq!(Some('H'), s.next());
         let rest: String = s.collect();
