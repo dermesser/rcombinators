@@ -281,10 +281,6 @@ impl<R, P: Parser<Result = R>> Parser for Repeat<P> {
         let mut v: Self::Result = Vec::new();
         let hold = st.hold();
         for i in 0.. {
-            if i > max {
-                st.release(hold);
-                return Ok(v);
-            }
             match self.inner.parse(st) {
                 Ok(r) => v.push(r),
                 Err(e) => {
@@ -296,6 +292,10 @@ impl<R, P: Parser<Result = R>> Parser for Repeat<P> {
                         return Err(e);
                     }
                 }
+            }
+            if i >= max - 1 {
+                st.release(hold);
+                return Ok(v);
             }
         }
         unreachable!()
@@ -375,6 +375,43 @@ mod tests {
         assert_eq!(Ok("de".to_string()), p.parse(&mut ps));
         assert_eq!(Ok(" ".to_string()), p.parse(&mut ps));
         assert_eq!(Ok("34".to_string()), p.parse(&mut ps));
+    }
+
+    #[test]
+    fn test_repeat() {
+        let mut ps = ParseState::new("aaa aaa aaaa aaaa");
+        assert_eq!(
+            3,
+            Repeat::new(StringParser::new("a"), RepeatSpec::Any)
+                .parse(&mut ps)
+                .unwrap()
+                .len()
+        );
+        assert!(StringParser::new(" ").parse(&mut ps).is_ok());
+        assert_eq!(
+            3,
+            Repeat::new(StringParser::new("a"), RepeatSpec::Min(2))
+                .parse(&mut ps)
+                .unwrap()
+                .len()
+        );
+        assert!(StringParser::new(" ").parse(&mut ps).is_ok());
+        assert_eq!(
+            3,
+            Repeat::new(StringParser::new("a"), RepeatSpec::Max(3))
+                .parse(&mut ps)
+                .unwrap()
+                .len()
+        );
+        assert!(StringParser::new("a ").parse(&mut ps).is_ok());
+        assert_eq!(
+            3,
+            Repeat::new(StringParser::new("a"), RepeatSpec::Between(1, 3))
+                .parse(&mut ps)
+                .unwrap()
+                .len()
+        );
+        assert!(StringParser::new("a").parse(&mut ps).is_ok());
     }
 
     #[test]
