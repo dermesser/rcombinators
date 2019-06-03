@@ -302,6 +302,30 @@ impl<R, P: Parser<Result = R>> Parser for Repeat<P> {
     }
 }
 
+/// Maybe is a combinator returning Option<T> for a parser returning T, meaning it does not stop
+/// parsing if an optional input was not encountered. It is very similar to a `Repeat` parser with
+/// `RepeatSpec::Max(1)`.
+pub struct Maybe<Inner: Parser> {
+    inner: Inner
+}
+
+impl<Inner: Parser> Maybe<Inner> {
+    pub fn new(p: Inner) -> Maybe<Inner> {
+        Maybe { inner: p }
+    }
+}
+
+impl<R, P: Parser<Result=R>> Parser for Maybe<P> {
+    type Result = Option<R>;
+    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+        match self.inner.parse(st) {
+            Ok(r) => Ok(Some(r)),
+            Err(_) => Ok(None),
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
