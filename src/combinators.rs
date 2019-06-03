@@ -306,7 +306,7 @@ impl<R, P: Parser<Result = R>> Parser for Repeat<P> {
 /// parsing if an optional input was not encountered. It is very similar to a `Repeat` parser with
 /// `RepeatSpec::Max(1)`.
 pub struct Maybe<Inner: Parser> {
-    inner: Inner
+    inner: Inner,
 }
 
 impl<Inner: Parser> Maybe<Inner> {
@@ -315,16 +315,18 @@ impl<Inner: Parser> Maybe<Inner> {
     }
 }
 
-impl<R, P: Parser<Result=R>> Parser for Maybe<P> {
+impl<R, P: Parser<Result = R>> Parser for Maybe<P> {
     type Result = Option<R>;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
         match self.inner.parse(st) {
             Ok(r) => Ok(Some(r)),
             Err(_) => Ok(None),
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -377,7 +379,8 @@ mod tests {
 
     #[test]
     fn test_partial_sequence() {
-        let mut p = PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int64::new()));
+        let mut p =
+            PartialSequence::new((StringParser::new("a"), StringParser::new("c"), Int64::new()));
         let mut ps = ParseState::new("acde");
         assert_eq!(
             Ok((Some("a".to_string()), Some("c".to_string()), None)),

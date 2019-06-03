@@ -29,9 +29,7 @@ impl fmt::Display for ParseError {
             ParseError::TransformFail(s, pos, inner) => {
                 write!(f, "Transform fail: {} at {} due to ", s, pos).and_then(|()| inner.fmt(f))
             }
-            ParseError::ExecFail(s) => {
-                write!(f, "Logic error: {}", s)
-            }
+            ParseError::ExecFail(s) => write!(f, "Logic error: {}", s),
         }
     }
 }

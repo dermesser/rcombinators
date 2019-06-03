@@ -145,7 +145,12 @@ impl<IType: Default + str::FromStr<Err = std::num::ParseIntError> + std::convert
     }
 }
 
-fn assemble_float(s: Option<String>, big: String, dot: Option<String>, mut little: Option<String>) -> ParseResult<f64> {
+fn assemble_float(
+    s: Option<String>,
+    big: String,
+    dot: Option<String>,
+    mut little: Option<String>,
+) -> ParseResult<f64> {
     if dot.is_some() && little.is_none() {
         little = Some("0".to_string());
     }
@@ -162,24 +167,21 @@ fn assemble_float(s: Option<String>, big: String, dot: Option<String>, mut littl
             Err(e) => return Err(execerr(e.description())),
         }
     }
-    let minus = if s.is_some() {
-        -1.
-    } else {
-        1.
-    };
-    return Ok(minus * (bigf + littlef))
+    let minus = if s.is_some() { -1. } else { 1. };
+    return Ok(minus * (bigf + littlef));
 }
 
 /// float parses floats in the format of `[-]dd[.[dd]]`. Currently, `e` notation is not supported.
 ///
 /// TODO: Compare with "native" parser, i.e. without combinators, and keep this as example.
-pub fn float() -> impl Parser<Result=f64> {
-        let minus = Maybe::new(StringParser::new("-"));
-        let digits = string_of("0123456789", RepeatSpec::Min(1));
-        let point = Maybe::new(StringParser::new("."));
-        let smalldigits = Maybe::new(string_of("0123456789", RepeatSpec::Min(1)));
-        let parser = Sequence::new((minus, digits, point, smalldigits)).apply(|(m,d,p,sd)| assemble_float(m, d, p, sd));
-        parser
+pub fn float() -> impl Parser<Result = f64> {
+    let minus = Maybe::new(StringParser::new("-"));
+    let digits = string_of("0123456789", RepeatSpec::Min(1));
+    let point = Maybe::new(StringParser::new("."));
+    let smalldigits = Maybe::new(string_of("0123456789", RepeatSpec::Min(1)));
+    let parser = Sequence::new((minus, digits, point, smalldigits))
+        .apply(|(m, d, p, sd)| assemble_float(m, d, p, sd));
+    parser
 }
 
 /// Nothing is a parser that always succeeds.
@@ -187,7 +189,10 @@ pub struct Nothing;
 
 impl Parser for Nothing {
     type Result = ();
-    fn parse(&mut self, _: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+    fn parse(
+        &mut self,
+        _: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
         Ok(())
     }
 }
