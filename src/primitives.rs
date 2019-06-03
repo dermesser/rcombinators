@@ -206,6 +206,7 @@ fn string_none_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::combinators::Sequence;
 
     #[test]
     fn test_parse_string() {
@@ -217,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_parse_int() {
-        let mut s = ParseState::new("-1252 353 354 -1253");
+        let mut s = ParseState::new("-1252 353 354 -1253 422345");
         let mut ip = Int64::new();
         let mut up = Uint64::new();
         let mut sp = StringParser::new(" ".to_string());
@@ -228,6 +229,9 @@ mod tests {
         assert_eq!(Ok(354), up.parse(&mut s));
         assert_eq!(Ok(" ".to_string()), sp.parse(&mut s));
         assert!(up.parse(&mut s).is_err());
+        assert_eq!(Ok(-1253), ip.parse(&mut s));
+        assert_eq!(Ok(" ".to_string()), sp.parse(&mut s));
+        assert_eq!(Ok(422345), up.parse(&mut s));
     }
 
     #[test]
@@ -249,5 +253,38 @@ mod tests {
         let mut st = ParseState::new("aaabcxxzy");
         let mut p = string_none_of("xyz", RepeatSpec::Min(1));
         assert_eq!(Ok("aaabc".to_string()), p.parse(&mut st));
+    }
+
+    use std::iter;
+
+    #[test]
+    fn bench_integer_medium() {
+        let piece = "-422345 ";
+        let repeats = 1000;
+        let mut input = String::with_capacity(piece.len() * repeats);
+        input.extend(iter::repeat(piece).take(repeats));
+        let mut ps = ParseState::new(&input);
+        let mut p = Sequence::new((Int64::new(), StringParser::new(" ")));
+        {
+            time_test!("parse-int with static buffer");
+            for i in 0..1000 {
+                let h = ps.hold();
+                let r = p.parse(&mut ps);
+                ps.reset(h);
+            }
+        }
+
+        let piece = "-42234511 ";
+        let mut input = String::with_capacity(piece.len() * repeats);
+        input.extend(iter::repeat(piece).take(repeats));
+        let mut ps = ParseState::new(&input);
+        {
+            time_test!("parse-int with dynamic buffer");
+            for i in 0..1000 {
+                let h = ps.hold();
+                let r = p.parse(&mut ps);
+                ps.reset(h);
+            }
+        }
     }
 }
