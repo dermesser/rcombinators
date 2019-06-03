@@ -1,11 +1,11 @@
-use crate::combinators::{Repeat, RepeatSpec};
-use crate::parser::{ParseError, ParseResult, Parser};
+use crate::combinators::{Maybe, Repeat, RepeatSpec, Sequence};
+use crate::parser::{execerr, ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
 use std::collections::HashSet;
 use std::error::Error;
 use std::iter::FromIterator;
-use std::str;
+use std::str::{self, FromStr};
 
 pub struct StringParser(String);
 
@@ -74,7 +74,7 @@ impl<IType: Default + str::FromStr<Err = std::num::ParseIntError> + std::convert
         st: &mut ParseState<impl Iterator<Item = char>>,
     ) -> ParseResult<Self::Result> {
         // Optimization for most ints.
-        const BUFSIZE: usize = 8;
+        const BUFSIZE: usize = 16;
         let mut buf: [char; BUFSIZE] = [' '; BUFSIZE];
         let mut widebuf: Option<Vec<char>> = None;
         let mut i = 0;
@@ -142,6 +142,53 @@ impl<IType: Default + str::FromStr<Err = std::num::ParseIntError> + std::convert
                 Err(ParseError::ExecFail(e.description().to_string()))
             }
         }
+    }
+}
+
+fn assemble_float(s: Option<String>, big: String, dot: Option<String>, mut little: Option<String>) -> ParseResult<f64> {
+    if dot.is_some() && little.is_none() {
+        little = Some("0".to_string());
+    }
+    assert!((dot.is_some() && little.is_some()) || (dot.is_none() && little.is_none()));
+    let bigf = match f64::from_str(&big) {
+        Ok(f) => f,
+        Err(e) => return Err(execerr(e.description())),
+    };
+    let mut littlef = 0.;
+    if let Some(mut d) = dot {
+        d.push_str(little.as_ref().unwrap());
+        littlef = match f64::from_str(&d) {
+            Ok(f) => f,
+            Err(e) => return Err(execerr(e.description())),
+        }
+    }
+    let minus = if s.is_some() {
+        -1.
+    } else {
+        1.
+    };
+    return Ok(minus * (bigf + littlef))
+}
+
+/// float parses floats in the format of `[-]dd[.[dd]]`. Currently, `e` notation is not supported.
+///
+/// TODO: Compare with "native" parser, i.e. without combinators, and keep this as example.
+pub fn float() -> impl Parser<Result=f64> {
+        let minus = Maybe::new(StringParser::new("-"));
+        let digits = string_of("0123456789", RepeatSpec::Min(1));
+        let point = Maybe::new(StringParser::new("."));
+        let smalldigits = Maybe::new(string_of("0123456789", RepeatSpec::Min(1)));
+        let parser = Sequence::new((minus, digits, point, smalldigits)).apply(|(m,d,p,sd)| assemble_float(m, d, p, sd));
+        parser
+}
+
+/// Nothing is a parser that always succeeds.
+pub struct Nothing;
+
+impl Parser for Nothing {
+    type Result = ();
+    fn parse(&mut self, _: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
+        Ok(())
     }
 }
 
@@ -242,6 +289,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_floats() {
+        let mut ps = ParseState::new("1 1. 1.5 -1.5 -1.75");
+        let mut p = float();
+        let want = vec![1., 1., 1.5, -1.5, -1.75];
+        for &f in want.iter() {
+            assert_eq!(Ok(f), p.parse(&mut ps));
+            let _ = StringParser::new(" ").parse(&mut ps);
+        }
+    }
+
+    #[test]
     fn test_string_of() {
         let mut st = ParseState::new("aaabcxxzy");
         let mut p = string_of("abcd", RepeatSpec::Min(1));
@@ -259,7 +317,7 @@ mod tests {
 
     #[test]
     fn bench_integer_medium() {
-        let piece = "-422345 ";
+        let piece = "-422345812310928 ";
         let repeats = 1000;
         let mut input = String::with_capacity(piece.len() * repeats);
         input.extend(iter::repeat(piece).take(repeats));
@@ -267,22 +325,40 @@ mod tests {
         let mut p = Sequence::new((Int64::new(), StringParser::new(" ")));
         {
             time_test!("parse-int with static buffer");
-            for i in 0..1000 {
+            for _ in 0..1000 {
                 let h = ps.hold();
-                let r = p.parse(&mut ps);
+                let _ = p.parse(&mut ps);
                 ps.reset(h);
             }
         }
 
-        let piece = "-42234511 ";
+        let piece = "-4223458123109289 ";
         let mut input = String::with_capacity(piece.len() * repeats);
         input.extend(iter::repeat(piece).take(repeats));
         let mut ps = ParseState::new(&input);
         {
             time_test!("parse-int with dynamic buffer");
-            for i in 0..1000 {
+            for _ in 0..1000 {
                 let h = ps.hold();
-                let r = p.parse(&mut ps);
+                let _ = p.parse(&mut ps);
+                ps.reset(h);
+            }
+        }
+    }
+
+    #[test]
+    fn bench_float() {
+        let piece = "-32.334 ";
+        let repeats = 1000;
+        let mut input = String::with_capacity(piece.len() * repeats);
+        input.extend(iter::repeat(piece).take(repeats));
+        let mut ps = ParseState::new(&input);
+        let mut p = Sequence::new((float(), StringParser::new(" ")));
+        {
+            time_test!("parse-float with combinators");
+            for _ in 0..1000 {
+                let h = ps.hold();
+                let _ = p.parse(&mut ps);
                 ps.reset(h);
             }
         }
