@@ -328,6 +328,32 @@ impl<R, P: Parser<Result = R>> Parser for Maybe<P> {
     }
 }
 
+/// Ignore ignores the result of an inner parser, effectively hiding the result. Useful if consumed
+/// input should not be processed further, and simplifies types in combined parsers.
+pub struct Ignore<Inner: Parser> {
+    inner: Inner,
+}
+
+impl<Inner: Parser> Ignore<Inner> {
+    pub fn new(p: Inner) -> Ignore<Inner> {
+        Ignore { inner: p }
+    }
+}
+
+impl<R, P: Parser<Result = R>> Parser for Ignore<P> {
+    type Result = ();
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
+        match self.inner.parse(st) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

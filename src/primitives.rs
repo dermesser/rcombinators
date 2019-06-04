@@ -1,4 +1,4 @@
-use crate::combinators::{Maybe, Repeat, RepeatSpec, Sequence};
+use crate::combinators::{Ignore, Maybe, Repeat, RepeatSpec, Sequence};
 use crate::parser::{execerr, ParseError, ParseResult, Parser};
 use crate::state::ParseState;
 
@@ -7,6 +7,7 @@ use std::error::Error;
 use std::iter::FromIterator;
 use std::str::{self, FromStr};
 
+/// StringParser consumes a fixed string.
 pub struct StringParser(String);
 
 impl StringParser {
@@ -46,6 +47,10 @@ impl Parser for StringParser {
     }
 }
 
+/// Int parses an integer resulting in `IType`. It is recommended to use the specializations such
+/// as `Int64`, `Uint32`, etc.
+///
+/// This is an optimized parser, not using combinators.
 pub struct Int<IType: Default + str::FromStr>(IType);
 
 pub type Int128 = Int<i128>;
@@ -79,8 +84,8 @@ impl<IType: Default + str::FromStr<Err = std::num::ParseIntError> + std::convert
         let mut widebuf: Option<Vec<char>> = None;
         let mut i = 0;
 
+        // Only check for negative sign if type is a signed integer.
         if IType::try_from(-1 as i8).is_ok() {
-            // Check for negative sign, only if integer can be signed.
             match st.peek() {
                 None => return Err(ParseError::EOF),
                 Some('-') => {
@@ -146,10 +151,11 @@ impl<IType: Default + str::FromStr<Err = std::num::ParseIntError> + std::convert
 }
 
 fn assemble_float(
-    s: Option<String>,
+    s: Option<()>,
     big: String,
     dot: Option<String>,
     mut little: Option<String>,
+    exp: Option<((), i32)>,
 ) -> ParseResult<f64> {
     if dot.is_some() && little.is_none() {
         little = Some("0".to_string());
@@ -167,20 +173,25 @@ fn assemble_float(
             Err(e) => return Err(execerr(e.description())),
         }
     }
-    let minus = if s.is_some() { -1. } else { 1. };
-    return Ok(minus * (bigf + littlef));
+    let mut multiplier: f64 = if s.is_some() { -1. } else { 1. };
+    if let Some((_, e)) = exp {
+        multiplier = (10. as f64).powi(e);
+    }
+    return Ok(multiplier * (bigf + littlef));
 }
 
-/// float parses floats in the format of `[-]dd[.[dd]]`. Currently, `e` notation is not supported.
+/// float parses floats in the format of `[-]dd[.[dd]][e[-]ddd]`.
 ///
 /// TODO: Compare with "native" parser, i.e. without combinators, and keep this as example.
 pub fn float() -> impl Parser<Result = f64> {
-    let minus = Maybe::new(StringParser::new("-"));
-    let digits = string_of("0123456789", RepeatSpec::Min(1));
+    let digits_set = "0123456789";
+    let minus = Maybe::new(Ignore::new(StringParser::new("-")));
+    let digits = string_of(digits_set, RepeatSpec::Min(1));
     let point = Maybe::new(StringParser::new("."));
-    let smalldigits = Maybe::new(string_of("0123456789", RepeatSpec::Min(1)));
-    let parser = Sequence::new((minus, digits, point, smalldigits))
-        .apply(|(m, d, p, sd)| assemble_float(m, d, p, sd));
+    let smalldigits = Maybe::new(string_of(digits_set, RepeatSpec::Min(1)));
+    let exp = Maybe::new(Sequence::new((Ignore::new(StringParser::new("e")), Int32::new())));
+    let parser = Sequence::new((minus, digits, point, smalldigits, exp))
+        .apply(|(m, d, p, sd, exp)| assemble_float(m, d, p, sd, exp));
     parser
 }
 
@@ -197,7 +208,7 @@ impl Parser for Nothing {
     }
 }
 
-/// OneOf matches any character that is in its specification.
+/// OneOf matches any character that is (or is not) in its set.
 pub struct OneOf(HashSet<char>, bool);
 
 impl OneOf {
@@ -205,7 +216,7 @@ impl OneOf {
         OneOf(chars.as_ref().chars().collect(), false)
     }
     /// Create a OneOf parser that parses all characters *not* in the given set.
-    pub fn new_inverse<S: AsRef<str>>(chars: S) -> OneOf {
+    pub fn new_none_of<S: AsRef<str>>(chars: S) -> OneOf {
         OneOf(chars.as_ref().chars().collect(), true)
     }
 }
@@ -220,7 +231,7 @@ impl Parser for OneOf {
             Some(c) => {
                 let present = self.0.contains(&c);
                 if self.1 {
-                    // Inverse mode
+                    // Inverse mode: Match all chars that are not in set.
                     if present {
                         return Err(ParseError::Fail("char (inverse) not matched", st.index()));
                     }
@@ -249,7 +260,7 @@ fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = St
 
 /// A parser that parses a string consisting of any characters not in the set.
 fn string_none_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
-    let oo = OneOf::new_inverse(chars);
+    let oo = OneOf::new_none_of(chars);
     let rp = Repeat::new(oo, rp);
     let make_string = |charvec: Vec<char>| Ok(String::from_iter(charvec.into_iter()));
     rp.apply(make_string)
@@ -295,9 +306,9 @@ mod tests {
 
     #[test]
     fn test_parse_floats() {
-        let mut ps = ParseState::new("1 1. 1.5 -1.5 -1.75");
+        let mut ps = ParseState::new("1 1. 1.5 -1.5 -1.75 2.5e-4");
         let mut p = float();
-        let want = vec![1., 1., 1.5, -1.5, -1.75];
+        let want = vec![1., 1., 1.5, -1.5, -1.75, 2.5e-4];
         for &f in want.iter() {
             assert_eq!(Ok(f), p.parse(&mut ps));
             let _ = StringParser::new(" ").parse(&mut ps);
