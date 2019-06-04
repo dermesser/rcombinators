@@ -353,6 +353,36 @@ impl<R, P: Parser<Result = R>> Parser for Ignore<P> {
     }
 }
 
+/// Applies one parser, discards the result, and returns the second parser's results if the first
+/// one succeeded.
+pub struct Then<A: Parser, B: Parser> {
+    a: A,
+    b: B,
+}
+
+impl<A: Parser, B: Parser> Then<A, B> {
+    pub fn new(first: A, second: B) -> Then<A, B> {
+        Then {
+            a: first,
+            b: second,
+        }
+    }
+}
+
+impl<A: Parser, B: Parser> Parser for Then<A, B> {
+    type Result = B::Result;
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
+        match self.a.parse(st) {
+            Ok(_) => (),
+            Err(e) => return Err(e),
+        }
+        self.b.parse(st)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,6 +416,16 @@ mod tests {
             )),
             p.parse(&mut ps)
         );
+    }
+
+    #[test]
+    fn test_then() {
+        let mut ps = ParseState::new("abcdef 123");
+        let mut p = StringParser::new("abc")
+            .then(StringParser::new("def"))
+            .then(whitespace())
+            .then(Int32::new());
+        assert_eq!(Ok(123), p.parse(&mut ps));
     }
 
     #[test]

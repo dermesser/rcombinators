@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::combinators::Transform;
+use crate::combinators::{Then, Transform};
 use crate::state::ParseState;
 
 #[derive(Debug, PartialEq)]
@@ -59,12 +59,14 @@ pub trait Parser {
     type Result;
 
     /// parse consumes input from `st` and returns a result or an error.
+    ///
+    /// NOTE: This could be generalized to apply to any item yielded by ParseState.
     fn parse(
         &mut self,
         st: &mut ParseState<impl Iterator<Item = char>>,
     ) -> ParseResult<Self::Result>;
 
-    /// apply transforms the result of this parser using a Transform combinator.
+    /// `apply` transforms the result of this parser using a Transform combinator.
     fn apply<R2, F: Fn(Self::Result) -> ParseResult<R2>>(
         self,
         f: F,
@@ -73,5 +75,14 @@ pub trait Parser {
         Self: std::marker::Sized,
     {
         Transform::new(self, f)
+    }
+
+    /// `then` attempts to parse input, and if it succeeds, executes parser `p`, only returning
+    /// `p`'s result. This is useful for chaining parsers of which the results are not need.
+    fn then<R2, P: Parser<Result = R2>>(self, p: P) -> Then<Self, P>
+    where
+        Self: std::marker::Sized,
+    {
+        Then::new(self, p)
     }
 }
