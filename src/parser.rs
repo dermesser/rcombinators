@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::combinators;
+use crate::combinators::Transform;
 use crate::state::ParseState;
 
 #[derive(Debug, PartialEq)]
@@ -36,6 +36,25 @@ impl fmt::Display for ParseError {
 
 pub type ParseResult<R> = Result<R, ParseError>;
 
+/// Parser is the central trait of `rcombinators`. Every object that can convert input into a Rust
+/// value implements this trait.
+///
+/// For example, the `Int32` parser parses a 32 bit signed integer,
+/// the `whitespace` parser consumes whitespace, and the `Sequence` combinator runs a sequence of
+/// sub-parser, succeeding only if every parser succeeds:
+///
+/// ```
+/// use rcombinators::combinators;
+/// use rcombinators::primitives;
+/// use rcombinators::ParseState;
+/// use rcombinators::Parser;
+///
+/// let mut ps = ParseState::new("123 456");
+/// let mut parser = combinators::Sequence::new((primitives::Int32::new(),
+///     primitives::whitespace(), primitives::Int32::new()));
+/// assert_eq!(Ok((123, (), 456)), parser.parse(&mut ps));
+/// ```
+///
 pub trait Parser {
     type Result;
 
@@ -49,10 +68,10 @@ pub trait Parser {
     fn apply<R2, F: Fn(Self::Result) -> ParseResult<R2>>(
         self,
         f: F,
-    ) -> combinators::Transform<Self::Result, R2, Self, F>
+    ) -> Transform<Self::Result, R2, Self, F>
     where
         Self: std::marker::Sized,
     {
-        combinators::Transform::new(self, f)
+        Transform::new(self, f)
     }
 }

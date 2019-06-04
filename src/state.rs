@@ -28,6 +28,9 @@ pub struct ParseState<Iter: Iterator<Item = char>> {
     // TODO: Implement garbage collection on `buf`
 }
 
+/// A Hold represents the parsing state at a certain point. It can be used to "un-consume" input.
+/// Currently, a panic occurs if a `Hold` object is dropped without first releasing or resetting it
+/// using `ParseState::release()` or `ParseState::drop()`.
 pub struct Hold {
     ix: usize,
     released: bool,
@@ -52,6 +55,7 @@ impl Drop for Hold {
 }
 
 impl<'a> ParseState<Chars<'a>> {
+    /// Initialize ParseState from a string.
     pub fn new(s: &'a str) -> ParseState<Chars<'a>> {
         ParseState {
             buf: vec![],
@@ -59,6 +63,7 @@ impl<'a> ParseState<Chars<'a>> {
             current: 0,
         }
     }
+    /// Initialize ParseState from a UTF-8 encoded source.
     pub fn from_reader<R: io::Read>(r: R) -> ParseState<impl Iterator<Item = char>> {
         ParseState {
             buf: vec![],
@@ -70,41 +75,50 @@ impl<'a> ParseState<Chars<'a>> {
 
 impl<Iter: Iterator<Item = char>> ParseState<Iter> {
     const PREFILL_DEFAULT: usize = 1024;
+
+    /// Return current index in input.
     pub fn index(&mut self) -> usize {
         self.current
     }
+
+    /// Remember the current position in the input.
     pub fn hold(&mut self) -> Hold {
         Hold::new(self.current)
     }
+
+    /// Notifiy the ParseState that a `Hold` is no longer needed (and the referenced piece of input
+    /// could be cleaned up, for example).
     pub fn release(&mut self, mut h: Hold) {
         // TODO: Implement when hold tracking is needed (for garbage collection).
         h.defuse();
     }
+
+    /// Reset state to what it was when `h` was created.
     pub fn reset(&mut self, mut h: Hold) {
         self.current = h.ix;
         h.defuse();
     }
+
+    /// Returns true if no input is left.
     pub fn finished(&self) -> bool {
         self.next.is_none() && self.current == self.buf.len()
     }
+
+    /// Shorthand for using a hold to undo a single call to `next()`.
     pub fn undo_next(&mut self) {
         assert!(self.current > 0);
         self.current -= 1;
     }
-    pub fn current(&self) -> Option<Iter::Item> {
-        if self.current < self.buf.len() {
-            Some(self.buf[self.current])
-        } else {
-            None
-        }
-    }
 
+    /// Fill buffer from source with at most `n` characters.
     fn prefill(&mut self, n: usize) {
         if let Some(next) = self.next.as_mut() {
             let mut v: Vec<char> = next.take(n).collect();
             self.buf.append(&mut v)
         }
     }
+
+    /// Return next character in input without advancing.
     pub fn peek(&mut self) -> Option<Iter::Item> {
         if self.current < self.buf.len() {
             return Some(self.buf[self.current]);

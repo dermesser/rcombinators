@@ -53,15 +53,25 @@ impl Parser for StringParser {
 /// This is an optimized parser, not using combinators.
 pub struct Int<IType: Default + str::FromStr>(IType);
 
+/// Parse a 128 bit signed integer.
 pub type Int128 = Int<i128>;
+/// Parse a 64 bit signed integer.
 pub type Int64 = Int<i64>;
+/// Parse a 32 bit signed integer.
 pub type Int32 = Int<i32>;
+/// Parse a 16 bit signed integer.
 pub type Int16 = Int<i16>;
+/// Parse a 8 bit signed integer.
 pub type Int8 = Int<i8>;
+/// Parse a 128 bit unsigned integer.
 pub type Uint128 = Int<u128>;
+/// Parse a 64 bit unsigned integer.
 pub type Uint64 = Int<u64>;
+/// Parse a 32 bit unsigned integer.
 pub type Uint32 = Int<u32>;
+/// Parse a 16 bit unsigned integer.
 pub type Uint16 = Int<u16>;
+/// Parse a 8 bit unsigned integer.
 pub type Uint8 = Int<u8>;
 
 impl<IType: Default + str::FromStr> Int<IType> {
@@ -175,21 +185,24 @@ fn assemble_float(
     }
     let mut multiplier: f64 = if s.is_some() { -1. } else { 1. };
     if let Some((_, e)) = exp {
-        multiplier = (10. as f64).powi(e);
+        multiplier *= (10. as f64).powi(e);
     }
     return Ok(multiplier * (bigf + littlef));
 }
 
 /// float parses floats in the format of `[-]dd[.[dd]][e[-]ddd]`.
 ///
-/// TODO: Compare with "native" parser, i.e. without combinators, and keep this as example.
+/// TODO: Compare speed with "native" parser, i.e. without combinators, and keep this as example.
 pub fn float() -> impl Parser<Result = f64> {
     let digits_set = "0123456789";
     let minus = Maybe::new(Ignore::new(StringParser::new("-")));
     let digits = string_of(digits_set, RepeatSpec::Min(1));
     let point = Maybe::new(StringParser::new("."));
     let smalldigits = Maybe::new(string_of(digits_set, RepeatSpec::Min(1)));
-    let exp = Maybe::new(Sequence::new((Ignore::new(StringParser::new("e")), Int32::new())));
+    let exp = Maybe::new(Sequence::new((
+        Ignore::new(StringParser::new("e")),
+        Int32::new(),
+    )));
     let parser = Sequence::new((minus, digits, point, smalldigits, exp))
         .apply(|(m, d, p, sd, exp)| assemble_float(m, d, p, sd, exp));
     parser
@@ -251,7 +264,7 @@ impl Parser for OneOf {
 }
 
 /// A parser that parses a string consisting of characters `chars`.
-fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
+pub fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
     let oo = OneOf::new(chars);
     let rp = Repeat::new(oo, rp);
     let make_string = |charvec: Vec<char>| Ok(String::from_iter(charvec.into_iter()));
@@ -259,11 +272,16 @@ fn string_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = St
 }
 
 /// A parser that parses a string consisting of any characters not in the set.
-fn string_none_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
+pub fn string_none_of<S: AsRef<str>>(chars: S, rp: RepeatSpec) -> impl Parser<Result = String> {
     let oo = OneOf::new_none_of(chars);
     let rp = Repeat::new(oo, rp);
     let make_string = |charvec: Vec<char>| Ok(String::from_iter(charvec.into_iter()));
     rp.apply(make_string)
+}
+
+/// whitespace consumes any number of tabs, spaces, newlines.
+pub fn whitespace() -> impl Parser<Result = ()> {
+    Ignore::new(Repeat::new(OneOf::new(" \n\r\t"), RepeatSpec::Any))
 }
 
 #[cfg(test)]
@@ -306,9 +324,9 @@ mod tests {
 
     #[test]
     fn test_parse_floats() {
-        let mut ps = ParseState::new("1 1. 1.5 -1.5 -1.75 2.5e-4");
+        let mut ps = ParseState::new("1 1. 1.5 -1.5 -1.75 2.5e-4 -2e-2");
         let mut p = float();
-        let want = vec![1., 1., 1.5, -1.5, -1.75, 2.5e-4];
+        let want = vec![1., 1., 1.5, -1.5, -1.75, 2.5e-4, -0.02];
         for &f in want.iter() {
             assert_eq!(Ok(f), p.parse(&mut ps));
             let _ = StringParser::new(" ").parse(&mut ps);

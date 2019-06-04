@@ -353,7 +353,6 @@ impl<R, P: Parser<Result = R>> Parser for Ignore<P> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
