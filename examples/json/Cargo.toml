@@ -1,0 +1,9 @@
+[package]
+name = "rcombinators_example-json"
+version = "0.1.0"
+authors = ["Lewin Bormann <lewin@lewin-bormann.info>"]
+edition = "2018"
+
+[dependencies]
+rcombinators = { path = "../../" }
+lazy_static = "1.3"
