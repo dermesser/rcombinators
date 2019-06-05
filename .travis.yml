@@ -1,0 +1,34 @@
+os:
+  - linux
+  - osx
+dist: xenial
+sudo: false
+language: rust
+rust:
+  - stable
+  - nightly
+
+stages:
+  - name: test
+  - name: lint
+
+install: true
+
+# Default script is the "test" stage
+script: 
+  - cargo build
+  - cargo test
+
+jobs:
+  include:
+    - stage: lint
+      if: os = linux
+      rust: stable
+      install:
+        - rustup component add clippy
+        - rustup component add rustfmt
+      script:
+        - cargo fmt --all -- --check
+        - cargo clippy --all-targets --all-features -- -D warnings || true
+
+cache: cargo
