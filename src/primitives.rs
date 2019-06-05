@@ -8,6 +8,7 @@ use std::iter::FromIterator;
 use std::str::{self, FromStr};
 
 /// StringParser consumes a fixed string.
+#[derive(Clone, Debug, PartialEq)]
 pub struct StringParser(String);
 
 impl StringParser {

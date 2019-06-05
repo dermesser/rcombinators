@@ -354,7 +354,8 @@ impl<R, P: Parser<Result = R>> Parser for Ignore<P> {
 }
 
 /// Applies one parser, discards the result, and returns the second parser's results if the first
-/// one succeeded.
+/// one succeeded. To skip the input consumed by several parsers, use a `Sequence` combinators as
+/// `A`.
 pub struct Then<A: Parser, B: Parser> {
     a: A,
     b: B,
