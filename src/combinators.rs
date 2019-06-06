@@ -384,6 +384,51 @@ impl<A: Parser, B: Parser> Parser for Then<A, B> {
     }
 }
 
+/// Lazy is a helper for a typical situation where you have an `Alternative` or a `Sequence` and
+/// don't want to construct an expensive parser every time just in order for it to be dropped
+/// without having parsed anything. For example:
+///
+/// ```ignore
+/// // Let's say dict is really expensive! the first ones not as much
+/// let mut p = Alternative::new((number(), string(), atom(), dict()));
+/// ```
+///
+/// Then you can wrap the `dict` parser constructor in a `Lazy` parser. Then it will only be
+/// constructed if the `Alternative` actually needs a `dict` parser:
+///
+/// ```ignore
+/// let mut p = Alternative::new((number(), string(), atom(), Lazy::new(dict)));
+/// ```
+///
+/// Constructing a `Lazy` combinator is in comparison quite cheap, as it only involves copying a
+/// function pointer. `Lazy` also caches the result of the function, meaning it will be called at
+/// most once.
+pub struct Lazy<P, F: FnMut() -> P>(F, Option<P>);
+
+impl<R, P: Parser<Result = R>, F: FnMut() -> P> Lazy<P, F> {
+    /// Create a new instance of `Lazy`:
+    ///
+    /// ```ignore
+    /// let l = Lazy::new(|| some_expensive_function());
+    /// ```
+    pub fn new(f: F) -> Lazy<P, F> {
+        Lazy(f, None)
+    }
+}
+
+impl<R, P: Parser<Result = R>, F: FnMut() -> P> Parser for Lazy<P, F> {
+    type Result = R;
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
+        if self.1.is_none() {
+            self.1 = Some((self.0)());
+        }
+        self.1.as_mut().unwrap().parse(st)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +544,46 @@ mod tests {
             Ok((Some((12, " ".to_string(), -12)), None)),
             p.parse(&mut ps)
         );
+    }
+
+    #[test]
+    fn test_lazy() {
+        let mut ps = ParseState::new("123");
+        let mut p = Alternative::new((
+            Uint8::new(),
+            Lazy::new(|| {
+                panic!("lazy should not run this function!");
+                Uint8::new()
+            }),
+        ));
+        assert_eq!(Ok(123), p.parse(&mut ps));
+    }
+
+    #[test]
+    fn test_lazy2() {
+        let mut ps = ParseState::new("123");
+        let mut p = Alternative::new((
+            string_none_of("01234", RepeatSpec::Min(1)),
+            Lazy::new(|| Uint8::new().apply(|i| Ok(i.to_string()))),
+        ));
+        assert_eq!(Ok("123".to_string()), p.parse(&mut ps));
+    }
+
+    #[test]
+    fn test_lazy3() {
+        let mut i = 0;
+        let mut ps = ParseState::new("123 124");
+        let mut lzy = || {
+                assert_eq!(0, i);
+                i += 1;
+                string_of("0123456789", RepeatSpec::Min(1))
+            };
+        let mut p = Alternative::new((
+            string_of("a", RepeatSpec::Min(1)),
+            Lazy::new(lzy),
+        ));
+        assert_eq!(Ok("123".to_string()), p.parse(&mut ps));
+        assert!(whitespace().parse(&mut ps).is_ok());
+        assert_eq!(Ok("124".to_string()), p.parse(&mut ps));
     }
 }
