@@ -222,16 +222,46 @@ impl Parser for Nothing {
     }
 }
 
+/// Efficient matching depending on number of characters (a HashSet is much slower than a Vec for
+/// less than ~20 chars).
+enum MatchSpec {
+    One(char),
+    Some(Vec<char>),
+    Many(HashSet<char>),
+}
+
+/// Threshold above which a HashSet is used instead of a Vec. Empirically determined.
+const MATCHSPEC_MANY_THRESHOLD: usize = 20;
+
+impl MatchSpec {
+    fn new<S: AsRef<str>>(chars: S) -> MatchSpec {
+        if chars.as_ref().len() == 1 {
+            MatchSpec::One(chars.as_ref().chars().next().unwrap())
+        } else if chars.as_ref().len() <= MATCHSPEC_MANY_THRESHOLD {
+            MatchSpec::Some(chars.as_ref().chars().collect())
+        } else {
+            MatchSpec::Many(chars.as_ref().chars().collect())
+        }
+    }
+    fn matches(&self, c: char) -> bool {
+        match self {
+            MatchSpec::One(cc) => c == *cc,
+            MatchSpec::Some(cs) => cs.contains(&c),
+            MatchSpec::Many(cs) => cs.contains(&c),
+        }
+    }
+}
+
 /// OneOf matches any character that is (or is not) in its set.
-pub struct OneOf(HashSet<char>, bool);
+pub struct OneOf(MatchSpec, bool);
 
 impl OneOf {
     pub fn new<S: AsRef<str>>(chars: S) -> OneOf {
-        OneOf(chars.as_ref().chars().collect(), false)
+        OneOf(MatchSpec::new(chars), false)
     }
     /// Create a OneOf parser that parses all characters *not* in the given set.
     pub fn new_none_of<S: AsRef<str>>(chars: S) -> OneOf {
-        OneOf(chars.as_ref().chars().collect(), true)
+        OneOf(MatchSpec::new(chars), true)
     }
 }
 
@@ -243,20 +273,11 @@ impl Parser for OneOf {
     ) -> ParseResult<Self::Result> {
         match st.peek() {
             Some(c) => {
-                let present = self.0.contains(&c);
-                if self.1 {
-                    // Inverse mode: Match all chars that are not in set.
-                    if present {
-                        return Err(ParseError::Fail("char (inverse) not matched", st.index()));
-                    }
+                if self.0.matches(c) ^ self.1 {
                     st.next();
-                    return Ok(c);
+                    Ok(c)
                 } else {
-                    if present {
-                        st.next();
-                        return Ok(c);
-                    }
-                    return Err(ParseError::Fail("char not matched", st.index()));
+                    Err(ParseError::Fail("char not matched", st.index()))
                 }
             }
             _ => Err(ParseError::EOF),
