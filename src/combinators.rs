@@ -573,7 +573,7 @@ mod tests {
     fn test_lazy3() {
         let mut i = 0;
         let mut ps = ParseState::new("123 124");
-        let mut lzy = || {
+        let lzy = || {
                 assert_eq!(0, i);
                 i += 1;
                 string_of("0123456789", RepeatSpec::Min(1))

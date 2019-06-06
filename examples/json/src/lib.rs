@@ -34,7 +34,7 @@ impl Parser for ValueParser {
     ) -> ParseResult<Self::Result> {
         let dict = combinators::Lazy::new(dict);
         let list = combinators::Lazy::new(list);
-        combinators::Alternative::new((string(), number(), dict, list)).parse(st)
+        combinators::Alternative::new((string(), number(), list, dict)).parse(st)
     }
 }
 
@@ -44,7 +44,7 @@ fn number() -> impl Parser<Result = Value> {
 
 fn string() -> impl Parser<Result = Value> {
     let quote = primitives::StringParser::new("\"");
-    let middle = primitives::string_none_of("\"", combinators::RepeatSpec::Any);
+    let middle = combinators::Lazy::new(|| primitives::string_none_of("\"", combinators::RepeatSpec::Any));
     let string_with_quotes = combinators::Sequence::new((quote.clone(), middle, quote));
     let string = string_with_quotes.apply(|(_, s, _)| Ok(Value::String(s)));
     string
@@ -55,18 +55,21 @@ fn list() -> impl Parser<Result = Value> {
         primitives::StringParser::new("["),
         primitives::StringParser::new("]"),
     );
-    let val = ValueParser;
-    let comma = primitives::StringParser::new(",");
-    let separated_element = combinators::Sequence::new((
-        primitives::whitespace(),
-        val,
-        primitives::whitespace(),
-        combinators::Maybe::new(comma),
-    ));
-    let separated_element = separated_element.apply(|(_, v, _, _)| Ok(v));
-    let separated_elements =
-        combinators::Repeat::new(separated_element, combinators::RepeatSpec::Any);
-    let list = combinators::Sequence::new((open, separated_elements, close))
+    let inner = || {
+        let val = ValueParser;
+        let comma = primitives::StringParser::new(",");
+        let separated_element = combinators::Sequence::new((
+            primitives::whitespace(),
+            val,
+            primitives::whitespace(),
+            combinators::Maybe::new(comma),
+        ));
+        let separated_element = separated_element.apply(|(_, v, _, _)| Ok(v));
+        let separated_elements =
+            combinators::Repeat::new(separated_element, combinators::RepeatSpec::Any);
+        separated_elements
+    };
+    let list = combinators::Sequence::new((open, combinators::Lazy::new(inner), close))
         .apply(|(_, es, _)| Ok(Value::List(es)));
     list
 }
@@ -76,28 +79,32 @@ fn dict() -> impl Parser<Result = Value> {
         primitives::StringParser::new("{"),
         primitives::StringParser::new("}"),
     );
-    let comma = primitives::StringParser::new(",");
-    let sep = primitives::StringParser::new(":");
-    let key = string().apply(|v| match v {
-        Value::String(s) => Ok(s),
-        _ => panic!("unexpected value type in string position"),
-    });
-    let value = ValueParser;
-    let separated_element = combinators::Sequence::new((
-        primitives::whitespace(),
-        key,
-        primitives::whitespace(),
-        sep,
-        primitives::whitespace(),
-        value,
-        primitives::whitespace(),
-        combinators::Maybe::new(comma),
-    ));
-    let separated_element =
-        separated_element.apply(|(_ws1, k, _ws2, _sep, _ws3, v, _ws4, _comma)| Ok((k, v)));
-    let separated_elements =
-        combinators::Repeat::new(separated_element, combinators::RepeatSpec::Any);
-    let dict = combinators::Sequence::new((open, separated_elements, close))
+
+    let inner = || {
+        let comma = primitives::StringParser::new(",");
+        let sep = primitives::StringParser::new(":");
+        let key = string().apply(|v| match v {
+            Value::String(s) => Ok(s),
+            _ => panic!("unexpected value type in string position"),
+        });
+        let value = ValueParser;
+        let separated_element = combinators::Sequence::new((
+            primitives::whitespace(),
+            key,
+            primitives::whitespace(),
+            sep,
+            primitives::whitespace(),
+            value,
+            primitives::whitespace(),
+            combinators::Maybe::new(comma),
+        ));
+        let separated_element =
+            separated_element.apply(|(_ws1, k, _ws2, _sep, _ws3, v, _ws4, _comma)| Ok((k, v)));
+        let separated_elements =
+            combinators::Repeat::new(separated_element, combinators::RepeatSpec::Any);
+        separated_elements
+    };
+    let dict = combinators::Sequence::new((open, combinators::Lazy::new(inner), close))
         .apply(|(_, es, _)| Ok(Value::Dict(HashMap::from_iter(es.into_iter()))));
     dict
 }
