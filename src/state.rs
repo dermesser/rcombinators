@@ -50,7 +50,9 @@ impl Hold {
 
 impl Drop for Hold {
     fn drop(&mut self) {
-        assert!(self.released, "Dropped unreleased hold! This is a bug");
+        if !std::thread::panicking() {
+            assert!(self.released, "Dropped unreleased hold! This is a bug");
+        }
     }
 }
 
