@@ -1,9 +1,6 @@
 //! A simplistic JSON parser library based on the `rcombinators` crate.
 //!
 
-#[macro_use]
-extern crate lazy_static;
-
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
@@ -26,22 +23,18 @@ impl Default for Value {
     }
 }
 
-struct PWrapper<P>(P);
-
-impl<P: Parser<Result=Value>> Parser for PWrapper<P> {
-    type Result = Value;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
-        self.0.parse(st)
-    }
-}
-
 #[derive(Default)]
-struct ValueParser<P>(Option<P>);
+struct ValueParser;
 
-impl<P: Parser<Result=Value>> Parser for ValueParser<P> {
+impl Parser for ValueParser {
     type Result = Value;
-    fn parse(&mut self, st: &mut ParseState<impl Iterator<Item=char>>) -> ParseResult<Self::Result> {
-        combinators::Alternative::new((dict(), list(), string(), number())).parse(st)
+    fn parse(
+        &mut self,
+        st: &mut ParseState<impl Iterator<Item = char>>,
+    ) -> ParseResult<Self::Result> {
+        let dict = combinators::Lazy::new(dict);
+        let list = combinators::Lazy::new(list);
+        combinators::Alternative::new((string(), number(), dict, list)).parse(st)
     }
 }
 
@@ -57,12 +50,12 @@ fn string() -> impl Parser<Result = Value> {
     string
 }
 
-fn list<P: Parser<Result=Value>>(val: Option<PWrapper<P>>) -> impl Parser<Result = Value> {
+fn list() -> impl Parser<Result = Value> {
     let (open, close) = (
         primitives::StringParser::new("["),
         primitives::StringParser::new("]"),
     );
-    let val = val;
+    let val = ValueParser;
     let comma = primitives::StringParser::new(",");
     let separated_element = combinators::Sequence::new((
         primitives::whitespace(),
@@ -89,7 +82,7 @@ fn dict() -> impl Parser<Result = Value> {
         Value::String(s) => Ok(s),
         _ => panic!("unexpected value type in string position"),
     });
-    let value = ValueParser(None);
+    let value = ValueParser;
     let separated_element = combinators::Sequence::new((
         primitives::whitespace(),
         key,
@@ -108,6 +101,9 @@ fn dict() -> impl Parser<Result = Value> {
         .apply(|(_, es, _)| Ok(Value::Dict(HashMap::from_iter(es.into_iter()))));
     dict
 }
+
+#[macro_use]
+extern crate time_test;
 
 #[cfg(test)]
 mod tests {
@@ -169,5 +165,23 @@ mod tests {
             ("x".to_string(), Value::Number(4.)),
         ]));
         assert_eq!(Ok(want), ValueParser.parse(&mut ps));
+    }
+
+    use std::iter;
+
+    #[test]
+    fn bench_value() {
+        let repeats = 12000;
+        let piece = r#"{"hello": 1.22, "world": [1, 2.3, 4, "five"], "test": "key", "lol": "ey"}"#;
+        let mut s = String::with_capacity(repeats * piece.len());
+        s.extend(iter::repeat(piece).take(repeats));
+        let mut ps = ParseState::new(&s);
+        let mut parser = ValueParser;
+        {
+            time_test!();
+            for _ in 0..repeats {
+                assert!(parser.parse(&mut ps).is_ok());
+            }
+        }
     }
 }
