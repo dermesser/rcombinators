@@ -146,7 +146,12 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
                 if self.current < Self::GARBAGE_COLLECT_THRESHOLD {
                     return false;
                 }
-                //println!("GC: Collecting {} elements between {} and {}", self.current-1, self.global, self.global+self.current-1);
+                /*println!(
+                    "GC: Collecting {} elements between {} and {}",
+                    self.current - 1,
+                    self.global - self.current,
+                    self.global - 1
+                );*/
                 // We can collect up to self.current-1.
                 self.buf.rotate_left(self.current - 1);
                 self.buf
@@ -163,7 +168,12 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
                 if ix < Self::GARBAGE_COLLECT_THRESHOLD {
                     return false;
                 }
-                //println!("GC: Collecting {} elements between {} and {}", ix-1, self.global-self.buf.len()+1, ix-1);
+                /*println!(
+                    "GC: Collecting {} elements between {} and {}",
+                    ix - 1,
+                    self.global - self.buf.len() + 1,
+                    ix - 1
+                );*/
                 self.buf.rotate_left(ix - 1);
                 self.buf.resize(self.buf.len() - ix + 1, 0 as char);
                 self.current = 1;

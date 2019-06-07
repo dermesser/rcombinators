@@ -382,9 +382,7 @@ mod tests {
         {
             time_test!("parse-int with static buffer");
             for _ in 0..1000 {
-                let h = ps.hold();
                 let _ = p.parse(&mut ps);
-                ps.reset(h);
             }
         }
 
@@ -395,9 +393,7 @@ mod tests {
         {
             time_test!("parse-int with dynamic buffer");
             for _ in 0..1000 {
-                let h = ps.hold();
                 let _ = p.parse(&mut ps);
-                ps.reset(h);
             }
         }
     }
@@ -413,9 +409,7 @@ mod tests {
         {
             time_test!("parse-float with combinators");
             for _ in 0..1000 {
-                let h = ps.hold();
                 let _ = p.parse(&mut ps);
-                ps.reset(h);
             }
         }
     }
