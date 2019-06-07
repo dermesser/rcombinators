@@ -56,6 +56,6 @@ pub mod primitives;
 mod state;
 
 pub use combinators::{Alternative, Maybe, PartialSequence, Repeat, Sequence, Then, Transform};
-pub use parser::{execerr, Parser, ParseResult};
+pub use parser::{execerr, ParseResult, Parser};
 pub use primitives::{float, string_none_of, string_of, whitespace, Int, StringParser};
 pub use state::ParseState;

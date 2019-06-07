@@ -85,6 +85,9 @@ impl<'a> ParseState<Chars<'a>> {
 
 impl<Iter: Iterator<Item = char>> ParseState<Iter> {
     const PREFILL_DEFAULT: usize = 1024;
+    /// Only collect buffer garbage when collectable number of bytes in buffer is larger than this
+    /// threshold.
+    const GARBAGE_COLLECT_THRESHOLD: usize = 1024 * 4;
 
     /// Return current index in input.
     pub fn index(&mut self) -> usize {
@@ -112,7 +115,7 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
             }
             Some((ix, count)) if ix == h.ix && count == 1 => {
                 self.oldest_hold_count = None;
-                // TODO: trigger garbage collection
+                self.maybe_gc();
             }
             _ => {}
         }
@@ -134,6 +137,40 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
         self.current -= self.global - h.ix;
         self.global = h.ix;
         h.defuse();
+    }
+
+    /// Remove data from buffer that is not hold by any parser anymore.
+    fn maybe_gc(&mut self) -> bool {
+        match self.oldest_hold_count {
+            None if self.current > 0 => {
+                if self.current < Self::GARBAGE_COLLECT_THRESHOLD {
+                    return false;
+                }
+                //println!("GC: Collecting {} elements between {} and {}", self.current-1, self.global, self.global+self.current-1);
+                // We can collect up to self.current-1.
+                self.buf.rotate_left(self.current - 1);
+                self.buf
+                    .resize(self.buf.len() - self.current + 1, 0 as char);
+                self.current = 1;
+                // self.global remains untouched.
+                true
+            }
+            Some((ix, _)) => {
+                // We can collect up to ix-1.
+
+                // Calculate local offset (in buf)
+                let ix = ix - self.global;
+                if ix < Self::GARBAGE_COLLECT_THRESHOLD {
+                    return false;
+                }
+                //println!("GC: Collecting {} elements between {} and {}", ix-1, self.global-self.buf.len()+1, ix-1);
+                self.buf.rotate_left(ix - 1);
+                self.buf.resize(self.buf.len() - ix + 1, 0 as char);
+                self.current = 1;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Returns true if no input is left.

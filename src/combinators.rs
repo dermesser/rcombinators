@@ -574,14 +574,11 @@ mod tests {
         let mut i = 0;
         let mut ps = ParseState::new("123 124");
         let lzy = || {
-                assert_eq!(0, i);
-                i += 1;
-                string_of("0123456789", RepeatSpec::Min(1))
-            };
-        let mut p = Alternative::new((
-            string_of("a", RepeatSpec::Min(1)),
-            Lazy::new(lzy),
-        ));
+            assert_eq!(0, i);
+            i += 1;
+            string_of("0123456789", RepeatSpec::Min(1))
+        };
+        let mut p = Alternative::new((string_of("a", RepeatSpec::Min(1)), Lazy::new(lzy)));
         assert_eq!(Ok("123".to_string()), p.parse(&mut ps));
         assert!(whitespace().parse(&mut ps).is_ok());
         assert_eq!(Ok("124".to_string()), p.parse(&mut ps));
