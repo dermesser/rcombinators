@@ -24,8 +24,12 @@ pub struct ParseState<Iter: Iterator<Item = char>> {
     buf: Vec<char>,
     next: Option<Iter>,
 
+    // Position in total stream, monotonically increasing except for hold resets.
+    global: usize,
+    // Position in buffer.
     current: usize,
-    // TODO: Implement garbage collection on `buf`
+    // Smallest held index, count of how many holds refer to it.
+    oldest_hold_count: Option<(usize, usize)>,
 }
 
 /// A Hold represents the parsing state at a certain point. It can be used to "un-consume" input.
@@ -63,6 +67,8 @@ impl<'a> ParseState<Chars<'a>> {
             buf: vec![],
             next: Some(s.chars()),
             current: 0,
+            global: 0,
+            oldest_hold_count: None,
         }
     }
     /// Initialize ParseState from a UTF-8 encoded source.
@@ -71,6 +77,8 @@ impl<'a> ParseState<Chars<'a>> {
             buf: vec![],
             next: Some(UTF8Reader(utf8reader::UTF8Reader::new(r))),
             current: 0,
+            global: 0,
+            oldest_hold_count: None,
         }
     }
 }
@@ -83,21 +91,48 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
         self.current
     }
 
-    /// Remember the current position in the input.
+    /// Remember the current position in the input and protect it from buffer garbage collection.
     pub fn hold(&mut self) -> Hold {
-        Hold::new(self.current)
+        if self.oldest_hold_count.is_none() {
+            self.oldest_hold_count = Some((self.global, 1))
+        } else if let Some((ix, count)) = self.oldest_hold_count {
+            if self.global == ix {
+                self.oldest_hold_count = Some((self.global, count + 1));
+            }
+        }
+        Hold::new(self.global)
     }
 
     /// Notifiy the ParseState that a `Hold` is no longer needed (and the referenced piece of input
     /// could be cleaned up, for example).
     pub fn release(&mut self, mut h: Hold) {
-        // TODO: Implement when hold tracking is needed (for garbage collection).
+        match self.oldest_hold_count {
+            Some((ix, count)) if ix == h.ix && count > 1 => {
+                self.oldest_hold_count = Some((ix, count - 1));
+            }
+            Some((ix, count)) if ix == h.ix && count == 1 => {
+                self.oldest_hold_count = None;
+                // TODO: trigger garbage collection
+            }
+            _ => {}
+        }
         h.defuse();
     }
 
     /// Reset state to what it was when `h` was created.
     pub fn reset(&mut self, mut h: Hold) {
-        self.current = h.ix;
+        match self.oldest_hold_count {
+            Some((ix, count)) if ix == h.ix && count > 1 => {
+                self.oldest_hold_count = Some((ix, count - 1));
+            }
+            Some((ix, count)) if ix == h.ix && count == 1 => {
+                self.oldest_hold_count = None;
+                // No garbage collection needed as current index references this hold.
+            }
+            _ => {}
+        }
+        self.current -= self.global - h.ix;
+        self.global = h.ix;
         h.defuse();
     }
 
@@ -110,14 +145,17 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
     pub fn undo_next(&mut self) {
         assert!(self.current > 0);
         self.current -= 1;
+        self.global -= 1;
     }
 
     /// Fill buffer from source with at most `n` characters.
-    fn prefill(&mut self, n: usize) {
+    fn prefill(&mut self, n: usize) -> bool {
         if let Some(next) = self.next.as_mut() {
-            let mut v: Vec<char> = next.take(n).collect();
-            self.buf.append(&mut v)
+            let oldlen = self.buf.len();
+            self.buf.extend(next.take(n));
+            return (self.buf.len() - oldlen) > 0;
         }
+        false
     }
 
     /// Return next character in input without advancing.
@@ -128,6 +166,7 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
             match self.next() {
                 Some(c) => {
                     self.current -= 1;
+                    self.global -= 1;
                     return Some(c);
                 }
                 None => return None,
@@ -145,18 +184,16 @@ impl<Iter: Iterator<Item = char>> Iterator for ParseState<Iter> {
     fn next(&mut self) -> Option<Iter::Item> {
         if self.current < self.buf.len() {
             self.current += 1;
+            self.global += 1;
             Some(self.buf[self.current - 1])
-        } else if let Some(cs) = self.next.as_mut() {
-            if let Some(c) = cs.next() {
-                self.buf.push(c);
-                self.current += 1;
-                Some(c)
+        } else {
+            if self.prefill(Self::PREFILL_DEFAULT) {
+                self.next()
             } else {
+                // Mark reader as finished.
                 self.next = None;
                 None
             }
-        } else {
-            None
         }
     }
 }
