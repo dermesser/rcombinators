@@ -88,7 +88,7 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
 
     /// Return current index in input.
     pub fn index(&mut self) -> usize {
-        self.current
+        self.global
     }
 
     /// Remember the current position in the input and protect it from buffer garbage collection.
