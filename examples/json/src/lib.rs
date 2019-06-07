@@ -44,7 +44,8 @@ fn number() -> impl Parser<Result = Value> {
 
 fn string() -> impl Parser<Result = Value> {
     let quote = primitives::StringParser::new("\"");
-    let middle = combinators::Lazy::new(|| primitives::string_none_of("\"", combinators::RepeatSpec::Any));
+    let middle =
+        combinators::Lazy::new(|| primitives::string_none_of("\"", combinators::RepeatSpec::Any));
     let string_with_quotes = combinators::Sequence::new((quote.clone(), middle, quote));
     let string = string_with_quotes.apply(|(_, s, _)| Ok(Value::String(s)));
     string
