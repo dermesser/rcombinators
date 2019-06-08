@@ -141,6 +141,10 @@ impl<Iter: Iterator<Item = char>> ParseState<Iter> {
 
     /// Remove data from buffer that is not hold by any parser anymore.
     fn maybe_gc(&mut self) -> bool {
+        // Disable garbage collection if buffer holds everything that it could ever hold.
+        if self.next.is_none() {
+            return false;
+        }
         match self.oldest_hold_count {
             None if self.current > 0 => {
                 if self.current < Self::GARBAGE_COLLECT_THRESHOLD {
