@@ -1,10 +1,13 @@
 [package]
 name = "rcombinators"
 version = "0.1.0"
-authors = ["Lewin Bormann <lewin@lewin-bormann.info>"]
+authors = ["Lewin Bormann <lbo@spheniscida.de>"]
+description = "A parser combinator library in rust."
+readme = "README.md"
+keywords = ["parsing", "parser-combinators", "parsec", "parse"]
+license = "MIT"
+repository = "https://github.com/dermesser/rcombinators"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 time-test = "0.2"
