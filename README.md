@@ -1,6 +1,7 @@
 # `rcombinators`
 
 [![Build Status](https://travis-ci.org/dermesser/rcombinators.svg?branch=master)](https://travis-ci.org/dermesser/rcombinators)
+[![crates.io](https://img.shields.io/crates/v/rcombinators.svg)](https://crates.io/crates/rcombinators)
 
 `rcombinators` is a Rust version of the [`pcombinators`](https://github.com/dermesser/pcombinators)
 library, providing parser combinators in Rust. As opposed to some other parser libraries it works
