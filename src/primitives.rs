@@ -374,14 +374,14 @@ mod tests {
     #[test]
     fn bench_integer_medium() {
         let piece = "-422345812310928 ";
-        let repeats = 1000;
+        let repeats = 1000000;
         let mut input = String::with_capacity(piece.len() * repeats);
         input.extend(iter::repeat(piece).take(repeats));
         let mut ps = ParseState::new(&input);
         let mut p = Sequence::new((Int64::new(), StringParser::new(" ")));
         {
             time_test!("parse-int with static buffer");
-            for _ in 0..1000 {
+            for _ in 0..repeats {
                 let _ = p.parse(&mut ps);
             }
         }
@@ -392,7 +392,7 @@ mod tests {
         let mut ps = ParseState::new(&input);
         {
             time_test!("parse-int with dynamic buffer");
-            for _ in 0..1000 {
+            for _ in 0..repeats {
                 let _ = p.parse(&mut ps);
             }
         }
@@ -401,14 +401,14 @@ mod tests {
     #[test]
     fn bench_float() {
         let piece = "-32.334 ";
-        let repeats = 1000;
+        let repeats = 1000000;
         let mut input = String::with_capacity(piece.len() * repeats);
         input.extend(iter::repeat(piece).take(repeats));
         let mut ps = ParseState::new(&input);
         let mut p = Sequence::new((float(), StringParser::new(" ")));
         {
             time_test!("parse-float with combinators");
-            for _ in 0..1000 {
+            for _ in 0..repeats {
                 let _ = p.parse(&mut ps);
             }
         }
